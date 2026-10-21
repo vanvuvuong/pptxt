@@ -38,8 +38,10 @@ import (
 	"github.com/andybalholm/brotli"
 )
 
-const magic = "PPTXT2 "
-const headerReserve = 220 // chars reserved per part for the header line
+const (
+	magic         = "PPTXT2 "
+	headerReserve = 220 // chars reserved per part for the header line
+)
 
 func die(f string, a ...any) {
 	fmt.Fprintf(os.Stderr, "ERROR: "+f+"\n", a...)
@@ -49,11 +51,11 @@ func die(f string, a ...any) {
 func usage() {
 	fmt.Fprintln(os.Stderr, `pptxt v2 - ship a .pptx through chat as text (smallest, verified)
 
-  pptxt enc [-e b32k|z85|b64] [-limit 40000] <input.pptx> <output.txt>
+  pptxt enc [-e b32k|z85|b64] [-limit 30000] <input.pptx> <output.txt>
       -e b32k   Base32768 (default, most compact): ~2.5x denser than base64, Unicode
       -e z85    Z85: ASCII, ~6% denser than base64, paste inside a code block
       -e b64    Base64: ASCII, most compatible
-      -limit    max characters per line = per message (default 40000)
+      -limit    max characters per line = per message (default 30000)
       -split    write one file per part (output.001.txt ...) instead of one line per part
       -> default: output.txt, one part per line; send each line as one message
 
@@ -71,7 +73,7 @@ func main() {
 		fs := flag.NewFlagSet("enc", flag.ExitOnError)
 		fs.Usage = usage
 		e := fs.String("e", "b32k", "")
-		limit := fs.Int("limit", 40000, "")
+		limit := fs.Int("limit", 30000, "")
 		split := fs.Bool("split", false, "")
 		fs.Parse(os.Args[2:])
 		if fs.NArg() != 2 || (*e != "b32k" && *e != "z85" && *e != "b64") || *limit < headerReserve+100 {
@@ -196,6 +198,7 @@ func (r reader) uv() uint64 {
 	}
 	return v
 }
+
 func (r reader) bytes() []byte {
 	n := r.uv()
 	if n > uint64(r.Len()) {
@@ -523,7 +526,7 @@ func fullDecode(texts map[string]string) ([]byte, *content, error) {
 	}
 	// re-read what we built, independently, and check it again
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("pptxt-verify-%d", time.Now().UnixNano()))
-	if err := os.WriteFile(tmp, file, 0600); err != nil {
+	if err := os.WriteFile(tmp, file, 0o600); err != nil {
 		return nil, nil, err
 	}
 	defer os.Remove(tmp)
@@ -590,13 +593,13 @@ func cmdEnc(in, out, enc string, limit int, split bool) {
 			if len(parts) > 1 {
 				name = fmt.Sprintf("%s.%03d%s", base, i+1, ext)
 			}
-			if err := os.WriteFile(name, []byte(p+"\n"), 0644); err != nil {
+			if err := os.WriteFile(name, []byte(p+"\n"), 0o644); err != nil {
 				die("%v", err)
 			}
 			fmt.Printf("wrote %s (%d chars)\n", name, utf8.RuneCountInString(p))
 		}
 	} else {
-		if err := os.WriteFile(out, []byte(strings.Join(parts, "\n")+"\n"), 0644); err != nil {
+		if err := os.WriteFile(out, []byte(strings.Join(parts, "\n")+"\n"), 0o644); err != nil {
 			die("%v", err)
 		}
 		fmt.Printf("wrote %s: %d line(s), longest %d chars - send each line as one message\n", out, len(parts), maxChars)
@@ -624,7 +627,7 @@ func cmdDec(out string, files []string) {
 	if err != nil {
 		die("%v - nothing written", err)
 	}
-	if err := os.WriteFile(out, file, 0644); err != nil {
+	if err := os.WriteFile(out, file, 0o644); err != nil {
 		die("%v", err)
 	}
 	what := "byte-identical"
